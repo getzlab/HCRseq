@@ -1,0 +1,11 @@
+pathway	metric	reporter
+MMR	fraction_repaired	GFP_BAR_003
+NER	abundance	GFP_BAR_004
+DR_O6MeG	fraction_repaired	GFP_BAR_005
+BER_8oxoG_C	fraction_repaired	GFP_BAR_006
+BER_A_8oxoG	fraction_repaired	GFP_BAR_007
+BER_UG	fraction_repaired	GFP_BAR_008
+BER_Hx	fraction_repaired	GFP_BAR_009
+NHEJ	abundance_nommej	GFP_BAR_DSBR_2
+MMEJ	abundance_mmej	GFP_BAR_DSBR_2
+control	control	GFP_BAR_010
