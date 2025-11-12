@@ -30,11 +30,12 @@ class UMIIterator:
     At each iteration, returns a list of reads all belonging to a single UMI
     """
 
-    def __init__(self,bam):
+    def __init__(self,bam,umi_tag = 'UB'):
         self.read_iter = bam.fetch(until_eof=True)
         self.reads = list()
         self.UMI = ""
         self.finished = False
+        self.umi_tag = umi_tag
 
         # Call once to load in first read
         self.__next__()
@@ -54,7 +55,7 @@ class UMIIterator:
 
         self.finished = True
         for read in self.read_iter:
-            umi = read.get_tag('UR')
+            umi = read.get_tag(self.umi_tag)
             if umi==self.UMI:
                 self.reads.append(read)
             else:

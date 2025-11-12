@@ -26,7 +26,7 @@ COPY setup.py .
 #    --no-deps is important because Conda already handled all dependencies.
 RUN pip install --no-deps -e .
 
-ENV PATH /opt/conda/bin:$PATH
+ENV PATH=/opt/conda/bin:$PATH
 
 ENTRYPOINT [ "/usr/local/bin/_entrypoint.sh" ]
 CMD [ "/bin/bash" ]

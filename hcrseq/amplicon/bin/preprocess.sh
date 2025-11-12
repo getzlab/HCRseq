@@ -11,7 +11,7 @@ sdir=$(dirname "${BASH_SOURCE[0]}")
 $sdir/trim_amplicons.sh ${R1} ${R2} $primer_config /dev/stdout $outstem.cutadapt_metrics.json | \
   python $sdir/../paired_consensus.py /dev/stdin /dev/stdout | \
   python $sdir/../extract_umi.py /dev/stdin /dev/stdout | \
-  samtools sort -t UR | tee $outstem.tagged.ubam | \
+  samtools sort -t UB | tee $outstem.tagged.ubam | \
   python $sdir/../dedup.py /dev/stdin /dev/stdout | \
   picard SortSam \
     INPUT=/dev/stdin \
@@ -22,6 +22,7 @@ $sdir/trim_amplicons.sh ${R1} ${R2} $primer_config /dev/stdout $outstem.cutadapt
 
   samtools fastq $outstem.dedup.ubam | \
   bwa mem -k10 $ref /dev/stdin | \
+  samtools view -ubh -F 2304 | \
   python $sdir/../global_realignment.py /dev/stdin /dev/stdout $ref | \
   picard SortSam \
     INPUT=/dev/stdin \
