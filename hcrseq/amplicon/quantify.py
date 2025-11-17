@@ -26,6 +26,18 @@ def abundance(counts,key,ctrl,reporter_key='total'):
     if control==0:
         return(np.nan,np.nan)
 
+    r,sd = calculate_ratio_and_sd(reporter,control)
+    return(r,sd)
+
+def abundance_nommej(counts,key,ctrl,reporter_key='total'):
+
+    reporter = counts[key][reporter_key] - counts[key]['del_mh']
+    control = counts[ctrl]['total']
+
+    r, sd = calculate_ratio_and_sd(reporter, control)
+    return (r, sd)
+
+def calculate_ratio_and_sd(reporter,control):
     r = reporter/control
     # Assuming poisson variance and using Taylor expansion
     sd = float(np.sqrt(1/control**2 * (reporter + r**2*control)))
@@ -36,7 +48,7 @@ def abundance(counts,key,ctrl,reporter_key='total'):
 METRICS = {'fraction_repaired' : fraction_repaired,
            'abundance' : abundance,
            'abundance_mmej' : lambda counts,key,ctrl : abundance(counts,key,ctrl,reporter_key='del_mh'),
-           'abundance_nommej' : lambda counts,key,ctrl : abundance(counts,key,ctrl,reporter_key='del_nomh')}
+           'abundance_nommej' : abundance_nommej}
 
 
 def count_umis(bam, ref_fasta, lesion_info,min_mapq = 5,min_mh=3):
