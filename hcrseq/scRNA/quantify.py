@@ -4,9 +4,14 @@ import scanpy as sc
 
 def count_umis_at_lesion(bam, lesion_info,min_mapq = 5):
 
+    """
+    Iterates over bam and counts metrics at lesion sites
+    """
+
     L = pd.read_csv(lesion_info, sep='\t', index_col='reporter')
 
-    
+    # Read counts per umi
+    # dict[contig][cb][ub][metric]
     counts = dict()
     with pysam.AlignmentFile(bam) as bam_in:
         for contig,row in L.iterrows():
@@ -55,6 +60,10 @@ def count_umis_at_lesion(bam, lesion_info,min_mapq = 5):
     return(umis)
 
 def get_umi_counts(counts):
+    """
+    Collapses counts by umi
+    dict[contig][cb][ub][metric] -> dict[(contig,cb)][metric]
+    """
     umis = dict()
     for contig,v in counts.items():
         for cb,vv in v.items():
@@ -70,6 +79,9 @@ def quantify_repair(h5_file,bam,
                     lesion_info,
                     pathway_info,
                     min_mapq = 5):
+    """
+    Iterates over bam to quantify repair metrics, then adds them to anndata object in h5_file
+    """
 
     if h5_file.endswith('.h5'):
         adata = sc.read_10x_h5(h5_file)

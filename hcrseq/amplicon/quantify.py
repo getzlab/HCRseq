@@ -202,7 +202,7 @@ def check_deletion(read,pos,ref,allow_after_base=False):
 
         # Record entry
         deletion_info = {
-            'UMI': read.get_tag('UR'),
+            'UMI': read.get_tag('UB'),
             'contig': read.reference_name,
             'start': st+1,
             'end': en+1,
@@ -231,7 +231,7 @@ def check_insertion(read, pos):
                     en = aligned_pairs[j][0]+1
                 else:
                     insertion_sequence = read.query_sequence[st:en]
-                    insertion_info = {'UMI': read.get_tag('UR'),
+                    insertion_info = {'UMI': read.get_tag('UB'),
                                       'contig' : read.reference_name,
                                       'pos' : pos+1,
                                       'read_st' : st+1,
