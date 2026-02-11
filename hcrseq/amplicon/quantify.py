@@ -2,6 +2,9 @@ import pysam
 import pandas as pd
 import numpy as np
 
+from hcrseq.common.quantify import check_deletion, check_insertion, check_base
+
+
 def fraction_repaired(counts,key,ctrl,min_count=10):
     repaired = counts[key]['repaired']
     unrepaired = counts[key]['unrepaired']
@@ -118,7 +121,7 @@ def count_umis(bam, ref_fasta, lesion_info,min_mapq = 5,min_mh=3):
                     deletions.append(deletion_info)
 
                 ## Check for insertions
-                has_insertion,insertion_info = check_insertion(read,pos)
+                has_insertion,insertion_info = check_insertion(read, pos)
                 if has_insertion:
                     counts[contig]['ins'] += 1
 
@@ -126,7 +129,7 @@ def count_umis(bam, ref_fasta, lesion_info,min_mapq = 5,min_mh=3):
 
                 ## If lesion is a point mutation, then check it
                 if lesion['unrepaired_base'] in 'ACGT':
-                    base_aligned,base = check_base(read,pos)
+                    base_aligned,base = check_base(read, pos)
 
                     if base_aligned:
                         counts[contig]['repaired'] += base == lesion['repaired_base']
@@ -171,83 +174,6 @@ def check_perfect_match(read,ref_st,ref_en):
     # If we finish the loop without returning True, then it wasn't fully covered
     return False
 
-
-
-
-def check_deletion(read,pos,ref,allow_after_base=False):
-
-    contig = read.reference_name
-    aligned_pairs = read.get_aligned_pairs(matches_only=False)
-
-    x = np.array(aligned_pairs).astype(float)
-    x[x == None] = np.nan
-
-    is_spanning_del = any((np.isnan(x[:, 0])) & (x[:, 1] == pos) )
-
-    # the position represents the base before the breakpoint - we want to include deletions including the base on either side
-    if allow_after_base & (not is_spanning_del) and any((np.isnan(x[:, 0])) & (x[:, 1] == (pos+1))):
-        is_spanning_del =True
-        pos +=1
-
-    deletion_info = {}
-    if is_spanning_del:
-        aligned_idx = ~np.isnan(x[:, 0])
-        st = x[np.where(aligned_idx & (x[:, 1] < pos))[0][-1], 1]
-        en = x[np.where(aligned_idx & (x[:, 1] > pos))[0][0], 1]
-
-        deleted_sequence = ref.fetch(contig, st + 1, en)
-        flank_sequence = ref.fetch(contig, en, en + len(deleted_sequence))
-        max_mh_len = min(len(deleted_sequence),len(flank_sequence))
-        mh_len = sum(np.cumprod(np.array(list(deleted_sequence[0:max_mh_len])) == np.array(list(flank_sequence[0:max_mh_len]))))
-
-        # Record entry
-        deletion_info = {
-            'UMI': read.get_tag('UB'),
-            'contig': read.reference_name,
-            'start': st+1,
-            'end': en+1,
-            'deletion_length': len(deleted_sequence),
-            'deleted_sequence': deleted_sequence,
-            'flank_sequence': flank_sequence,
-            'microhomology_length': mh_len}
-
-
-    return (is_spanning_del, deletion_info)
-
-
-def check_insertion(read, pos):
-    aligned_pairs = read.get_aligned_pairs(matches_only=False)
-
-    for i, (read_idx, ref_idx) in enumerate(aligned_pairs):
-        # We are looking for an insertion that starts right after our target position
-        has_insertion = ref_idx == pos and (i + 1 < len(aligned_pairs) and aligned_pairs[i + 1][1] is None)
-
-        if has_insertion:
-            # We found an insertion. Now find its full length.
-            st = aligned_pairs[i + 1][0]
-            en = st+1
-            for j in range(i + 2, len(aligned_pairs)):
-                if aligned_pairs[j][1] is None:
-                    en = aligned_pairs[j][0]+1
-                else:
-                    insertion_sequence = read.query_sequence[st:en]
-                    insertion_info = {'UMI': read.get_tag('UB'),
-                                      'contig' : read.reference_name,
-                                      'pos' : pos+1,
-                                      'read_st' : st+1,
-                                      'read_en' : en+1,
-                                      'insertion_length' : len(insertion_sequence),
-                                      'insertion_sequence' : insertion_sequence}
-                    return (has_insertion, insertion_info)
-    return (False, {})
-
-def check_base(read,pos):
-    aligned_pairs = read.get_aligned_pairs(matches_only=True)
-
-    for i, (read_idx, ref_idx) in enumerate(aligned_pairs):
-        if ref_idx==pos:
-            return(True,read.query_sequence[read_idx])
-    return(False,"")
 
 def quantify_repair(counts,pathway_info):
     P = pd.read_csv(pathway_info,sep='\t')
