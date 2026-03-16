@@ -1,5 +1,0 @@
-
-Changes compared to v0.1:
-- Shorter MMEJ project was removed - pipeline will now quantify these from alignments to the WT sequence
-- Added DSB site to lesions file
-

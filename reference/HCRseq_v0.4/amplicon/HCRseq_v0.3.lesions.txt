@@ -1,8 +1,0 @@
-reporter	position	repaired_base	unrepaired_base
-GFP_BAR_003	63.0	G	C
-GFP_BAR_005	73.0	C	T
-GFP_BAR_006	73.0	C	A
-GFP_BAR_007	74.0	G	T
-GFP_BAR_008	72.0	G	A
-GFP_BAR_009	74.0	T	C
-GFP_BAR_DSBR_2	44.0		DSB
