@@ -9,11 +9,11 @@ def scrna():
     pass
 
 @scrna.command()
-@click.option("--plasmid_fasta")
+@click.option("--hcrseq_ref")
 @click.option("--genome_fasta")
 @click.option("--gtf")
 @click.option("--outstem")
-def prepare_reference(plasmid_fasta,genome_fasta,gtf,outstem):
+def prepare_reference(hcrseq_ref,genome_fasta,gtf,outstem):
     """
     Adds plasmid sequences to reference fasta and gtf, then runs cellranger mkref
     """
@@ -21,7 +21,7 @@ def prepare_reference(plasmid_fasta,genome_fasta,gtf,outstem):
     merge_genome_and_plasmid_ref(
         hg_file=genome_fasta,
         hg_gtf=gtf,
-        reporter_fasta=plasmid_fasta,
+        hcrseq_ref=hcrseq_ref,
         out_fasta_file=outstem + '.fasta',
         out_gtf_file=outstem + '.gtf'
     )

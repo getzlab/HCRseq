@@ -1,0 +1,1 @@
+hcrseq amplicon prepare-reference --reporter_info=reporter_info.txt --mmej_variants=MMEJ_variants.txt --forward_primer=GACAACCACTACCTGAG --reverse_primer=TCACTTGTACAGCTCGTCCATGC --outstem=amplicon/HCRseq_v0.3

@@ -3,116 +3,154 @@ import pandas as pd
 import pysam
 from collections import Counter, defaultdict
 
+class UMICounter(object):
+    def __init__(self,reporter,tags):
+        """
+        :param reporter: Reporter being counted
+        :param tags: Read tags being counted, (CB,UB) for scRNA, None for amplicon
+        """
+        self.reporter = reporter
 
-def count_umis(bam,
-               ref_fasta,
-               lesion_info,
-               min_mapq = 5,
-               min_mh=3,
-               require_exact_bc=True,
-               count_mismatch_distribution=True,
-               tags = None):
-    """
-    Counts UMIs (repaired and otherwise) from bam file
-    """
+        ref_len = len(self.reporter.sequence)
 
-    L = pd.read_csv(lesion_info, sep='\t', index_col='reporter')
-    ref = pysam.FastaFile(ref_fasta)
+        if tags is None:
+            self.counts = Counter()
+        else:
+            # scRNA mode, need two layer dictionary for CB/UMI
+            self.counts = defaultdict(lambda: defaultdict(Counter))
 
-    counts = defaultdict(Counter)
-    mismatch_dist = dict() # For each position, counts number of mismatches
-    deletions = list()
-    insertions=list()
+        self.mismatch_dist = {'nsnp': np.zeros(ref_len),
+                        'ndel': np.zeros(ref_len),
+                        'nins': np.zeros(ref_len),
+                        'N': np.zeros(ref_len)}  # For each position, counts number of mismatches
+        self.deletions = list()
+        self.insertions = list()
+        self.tags = tags
 
-    # First pass to calculate total reads
-    with pysam.AlignmentFile(bam) as bam_in:
-        for contig in L['contig'].unique():
+    def count(self,read):
 
-            if count_mismatch_distribution:
-                ref_len = len(ref.fetch(contig))
-                mismatch_dist[contig] = {'nsnp': np.zeros(ref_len),
-                                     'ndel': np.zeros(ref_len),
-                                     'nins': np.zeros(ref_len),
-                                     'N': np.zeros(ref_len)}
+        for tag in self.tags:
+            if tag not in read.tags:
+                continue
 
-            for read in bam_in.fetch(contig):
+        tag_vals = (read.get_tag(tag) for tag in self.tags) if self.tags is not None else None
 
-                if read.mapq < min_mapq:
-                    continue
+        self.inc('total',tag_vals)
 
-                # Check barcode sequence is correct
-                if require_exact_bc and (not check_reporter_barcode(read,ref.fetch(contig))):
-                    continue
+        self.count_mismatches(read)
 
-                counts[contig]['total'] += 1
+        if self.reporter.lesion_position is not None:
+            # Report any deletion spanning lesion
+            is_deleted, deletion_info = check_deletion(read,
+                                                       self.reporter.lesion_position,
+                                                       self.reporter.sequence,
+                                                       allow_after_base=self.reporter.unrepaired_base == 'DSB')
+            if is_deleted:
+                self.inc('del',tag_vals)
 
-                if count_mismatch_distribution:
-                    count_mismatches(read, mismatch_dist)
+                if deletion_info['microhomology_length'] >= self.min_mh:
+                    self.inct('del_mh',tag_vals)
+                else:
+                    self.inc('del_nomh',tag_vals)
 
-                if contig in L.index:
+                for tag in self.tags:
+                    deletion_info[tag] = read.get_tag(tag)
+                self.deletions.append(deletion_info)
 
-                    lesion = L.loc[contig]
-                    pos = lesion['position'] - 1
+            ## Check for insertions
+            has_insertion, insertion_info = check_insertion(read, self.reporter.lesion_position)
+            if has_insertion:
+                self.inc('ins',tag_vals)
 
-                    ## Check for deletions
-                    is_deleted, deletion_info = check_deletion(read,
-                                                               pos,
-                                                               ref,
-                                                               allow_after_base = lesion['unrepaired_base']=='DSB')
-                    if is_deleted:
-                        counts[contig]['del'] += 1
+                for tag in self.tags:
+                    insertion_info[tag] = read.get_tag(tag)
 
-                        if deletion_info['microhomology_length'] >= min_mh:
-                            counts[contig]['del_mh'] += 1
-                        else:
-                            counts[contig]['del_nomh'] += 1
-                        deletions.append(deletion_info)
+                self.insertions.append(insertion_info)
 
-                    ## Check for insertions
-                    has_insertion,insertion_info = check_insertion(read, pos)
-                    if has_insertion:
-                        counts[contig]['ins'] += 1
+            ## Check for point mutations
+            if self.reporter.unrepaired_base in 'ACGT':
+                base_aligned, base = check_base(read, self.reporter.lesion_position)
 
-                        insertions.append(insertion_info)
+                if base_aligned:
+                    self.inc('repaired',tag_vals,base == self.reporter.repaired_base)
+                    self.inc('unrepaired',tag_vals, base == self.reporter.unrepaired_base)
+                    self.inc(base,tag_vals)
 
-                    ## If lesion is a point mutation, then check it
-                    if lesion['unrepaired_base'] in 'ACGT':
-                        base_aligned,base = check_base(read, pos)
 
-                        if base_aligned:
-                            counts[contig]['repaired'] += base == lesion['repaired_base']
-                            counts[contig]['unrepaired'] += base == lesion['unrepaired_base']
-                            counts[contig][base] += 1
+    def inc(self,key,tag_vals,val=1):
+        if self.tags is None:
+            # Amplicon mode - just one set of values
+            self.counts[key] += val
+        else:
+            # scRNA mode, need to keep try of CB/UMI
+            self.counts[tag_vals[0]][tag_vals[1]][key] += val
 
-    del_df = pd.DataFrame(deletions)
-    ins_df = pd.DataFrame(insertions)
+    def count_mismatches(self,read):
 
-    return(counts,del_df,ins_df,mismatch_dist)
+        aligned_pairs = read.get_aligned_pairs(with_seq=True)
 
-def count_mismatches(read,mismatch_dist):
-    contig = read.reference_name
+        for i, (query_pos, ref_pos, ref_base) in enumerate(aligned_pairs):
 
-    aligned_pairs = read.get_aligned_pairs(with_seq=True)
+            if ref_pos is None or ref_base is None:
+                continue
 
-    for i,(query_pos, ref_pos, ref_base) in enumerate(aligned_pairs):
+            if ref_base.islower():
+                self.mismatch_dist['nsnp'][ref_pos] += 1
+            if query_pos is None:
+                self.mismatch_dist['ndel'][ref_pos] += 1
+            if (i + 1 < len(aligned_pairs)) and (aligned_pairs[i + 1][1] is None):
+                self.mismatch_dist['nins'][ref_pos] += 1
+            self.mismatch_dist['N'][ref_pos] += 1
 
-        if ref_pos is None or ref_base is None:
-            continue
+class HCRseqQuantifier(object):
+    def __init__(self,reference,tags):
+        self.reference = reference
+        self.tags = tags
+        self.counters = dict()
 
-        if ref_base.islower():
-            mismatch_dist[contig]['nsnp'][ref_pos] += 1
-        if query_pos is None:
-            mismatch_dist[contig]['ndel'][ref_pos] += 1
-        if (i+1 < len(aligned_pairs)) and (aligned_pairs[i+1][1] is None):
-            mismatch_dist[contig]['nins'][ref_pos] += 1
-        mismatch_dist[contig]['N'][ref_pos] += 1
+        for reporter in self.reference.reporters:
+            self.counts[reporter] = UMICounter(reporter,tags)
 
-def check_reporter_barcode(read,ref_seq,barcode_len=6,barcode_offset = 23):
-    """
-    TODO : this only works for amplicon version, need to make work for scRNA
-    """
-    barcode_st = len(ref_seq) - barcode_offset - barcode_len
-    return(check_perfect_match(read,barcode_st,barcode_st + barcode_len-1))
+    def count_umis(self,bam,min_mapq = 5,min_mh=3,require_exact_bc=True):
+
+        with pysam.AlignmentFile(bam) as bam_in:
+            for reporter_counter in self.counters:
+                reporter = reporter_counter.reporter
+                for read in bam_in.fetch(reporter.name):
+
+                    if read.mapq < min_mapq:
+                        continue
+
+                    # Check barcode sequence is correct
+                    if require_exact_bc:
+                        if not check_perfect_match(read,
+                                               reporter.barcode_position,
+                                               reporter.barcode_position+reporter.barcode_len):
+                            continue
+
+                    reporter_counter.count(read)
+    def get_indel_df(self,indel_type):
+        df = pd.concat([pd.DataFrame(getattr(counter,indel_type)) for counter in self.counters],
+                       axis=0)
+        return(df)
+
+    def get_counts(self):
+        counts = {counter.reporter.name : counter.counts
+                  for counter in self.counters}
+        return counts
+
+    def quantify_repair(self):
+
+        c = self.get_counts()
+
+        for pathway in self.reference.pathways:
+            r,sd = pathway.calculate_repair(c)
+            pass
+
+
+
+        pass
+
 
 def check_perfect_match(read,ref_st,ref_en):
     """

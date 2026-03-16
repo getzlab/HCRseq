@@ -1,7 +1,13 @@
 from Bio import SeqIO
+from Bio.SeqRecord import SeqRecord
+from Bio.Seq import Seq
 import subprocess
+from hcrseq.common.ref import Reference
 
-def merge_genome_and_plasmid_ref(hg_file,reporter_fasta,hg_gtf,out_fasta_file,out_gtf_file):
+
+def merge_genome_and_plasmid_ref(hg_file,hcrseq_ref,hg_gtf,out_fasta_file,out_gtf_file):
+
+    ref = Reference.load(hcrseq_ref)
 
     ## Start by copying/downloading human genome fasta and gtf
     def create_output_file(input_file,output_file):
@@ -17,12 +23,11 @@ def merge_genome_and_plasmid_ref(hg_file,reporter_fasta,hg_gtf,out_fasta_file,ou
     create_output_file(hg_gtf,out_gtf_file)
 
     ## Then append the plasmid sequences
-    with open(out_fasta_file, "at") as outfasta, open(out_gtf_file, "at") as outgtf, open(reporter_fasta,"rt") as infasta:
-        for record in SeqIO.parse(infasta,"fasta"):
-            reporter_name = record.id
+    with open(out_fasta_file, "at") as outfasta, open(out_gtf_file, "at") as outgtf:
+        for reporter in ref.reporters:
 
-            SeqIO.write(record, outfasta, "fasta")
+            SeqIO.write(reporter.to_seqrecord(), outfasta, "fasta")
 
-            outgtf.write(f'{reporter_name}\tCUSTOM\tgene\t1\t{len(record)}\t.\t+\t.\tgene_id "{reporter_name}";\n')
-            outgtf.write(f'{reporter_name}\tCUSTOM\ttranscript\t1\t{len(record)}\t.\t+\t.\tgene_id "{reporter_name}"; transcript_id "{reporter_name}";\n')
-            outgtf.write(f'{reporter_name}\tCUSTOM\texon\t1\t{len(record)}\t.\t+\t.\tgene_id "{reporter_name}"; gene_type "protein_coding"; transcript_id "{reporter_name}"; exon_id "{reporter_name}";\n')
+            outgtf.write(f'{reporter.name}\tCUSTOM\tgene\t{reporter.tx_start}\t{reporter.tx_end}\t.\t+\t.\tgene_id "{reporter.name}";\n')
+            outgtf.write(f'{reporter.name}\tCUSTOM\ttranscript\t{reporter.tx_start}\t{reporter.tx_end}\t.\t+\t.\tgene_id "{reporter.name}"; transcript_id "{reporter.name}_t";\n')
+            outgtf.write(f'{reporter.name}\tCUSTOM\texon\t{reporter.tx_start}\t{reporter.tx_end}\t.\t+\t.\tgene_id "{reporter.name}"; gene_type "protein_coding"; transcript_id "{reporter.name}_t"; exon_id "{reporter.name}_e";\n')

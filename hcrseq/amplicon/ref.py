@@ -5,7 +5,7 @@ import pysam
 
 import pandas as pd
 
-from hcrseq.amplicon.util import rc
+from hcrseq.common.util import rc
 
 
 def create_amplicon_reference_v2(reporter_info,
