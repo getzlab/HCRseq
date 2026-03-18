@@ -122,7 +122,7 @@ class HCRseqQuantifier(object):
                         continue
 
                     # Check barcode sequence is correct
-                    if require_exact_bc:
+                    if require_exact_bc and (reporter.barcode is not None):
                         if not check_perfect_match(read,
                                                reporter.barcode_position,
                                                reporter.barcode_position+reporter.barcode_len):
