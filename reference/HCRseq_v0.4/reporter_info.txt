@@ -11,5 +11,5 @@ GFP_BAR_009	GFP	ATAGCT	1632	T	C
 GFP_BAR_DSBR_2	mCherry	GCAATA	1636		DSB
 mOrange_001	mOrange				
 BFP_001	BFP				
-GFP_BAR_DSBR_HR	mCherry_HR_long				
+GFP_BAR_DSBR_HR	mCherry_HR_long	GCAATA			
 AmCyan_001	AmCyan				

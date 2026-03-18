@@ -88,6 +88,15 @@ class Reference:
 
         R = R.join(V.set_index('name'),on='plasmid',how='left')
 
+        # Update barcode sequences
+        idx = ~R['barcode_position'].isna()
+        for ind,row in R[idx].iterrows():
+            st = int(row['barcode_position'])
+            en = int(row['barcode_position'] + len(row['barcode']) + 1)
+            seq = row['sequence']
+            R.loc[ind,'sequence'] = seq[0:st] + row['barcode'] + seq[en:]
+
+
         reporters = {row['name']: Reporter(**row)
                      for _, row in R.iterrows()}
 
