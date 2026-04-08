@@ -119,6 +119,18 @@ class Reference:
         with open(in_pickle, 'rb') as handle:
             return pkl.load(handle)
 
+    def get_pathway_dict(self):
+        return({pathway.name : pathway for pathway in self.pathways})
+
+    def get_reporter_dict(self):
+        return({reporter.name : reporter for reporter in self.reporters})
+
+    def get_pathway(self,name):
+        return(self.get_pathway_dict()[name])
+
+    def get_reporter(self,name):
+        return(self.get_reporter_dict()[name])
+
 
 
 class Pathway:

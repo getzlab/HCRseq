@@ -3,6 +3,9 @@ import pandas as pd
 import pysam
 from collections import Counter, defaultdict
 
+from hcrseq.common.util import check_perfect_match
+
+
 class UMICounter(object):
     def __init__(self,reporter,tags):
         """
@@ -124,7 +127,7 @@ class HCRseqQuantifier(object):
                     # Check barcode sequence is correct
                     if require_exact_bc and (reporter.barcode is not None):
                         if not check_perfect_match(read,
-                                               reporter.barcode_position,
+                                                   reporter.barcode_position,
                                                reporter.barcode_position+reporter.barcode_len):
                             continue
 
@@ -150,36 +153,6 @@ class HCRseqQuantifier(object):
 
 
         pass
-
-
-def check_perfect_match(read,ref_st,ref_en):
-    """
-    Returns true if a read perfectly aligns to a particular reference region with no mismatches/indels
-    """
-
-    aligned_pairs = read.get_aligned_pairs(with_seq=True,matches_only=False)
-
-    found = False
-    for read_pos,ref_pos,base in aligned_pairs:
-
-        if ref_pos ==ref_st:
-            found=True
-
-        if found:
-            # Found an indel
-            if (read_pos is None) or (ref_pos is None):
-                return False
-
-            # Found a mismatch
-            if base.islower():
-                return False
-
-            # If we got all the way to the end, return True
-            if ref_pos == ref_en:
-                    return True
-
-    # If we finish the loop without returning True, then it wasn't fully covered
-    return False
 
 
 def check_deletion(read,pos,ref,allow_after_base=False):
