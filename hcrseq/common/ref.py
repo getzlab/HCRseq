@@ -21,12 +21,12 @@ class Reporter(object):
         self.name = name
         self.plasmid = plasmid
         self.sequence = sequence
-        self.tx_start = tx_start
-        self.tx_end = tx_end
-        self.barcode_position = barcode_position
+        self.tx_start = tx_start - 1
+        self.tx_end = tx_end - 1
+        self.barcode_position = barcode_position - 1
         self.barcode = barcode
         self.barcode_len = 6
-        self.lesion_position = lesion_position
+        self.lesion_position = lesion_position - 1
         self.unrepaired_base = unrepaired_base
         self.repaired_base = repaired_base
 

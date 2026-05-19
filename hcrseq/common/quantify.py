@@ -7,7 +7,7 @@ from hcrseq.common.util import check_perfect_match
 
 
 class UMICounter(object):
-    def __init__(self,reporter,tags):
+    def __init__(self,reporter,tags,min_mh=3):
         """
         :param reporter: Reporter being counted
         :param tags: Read tags being counted, (CB,UB) for scRNA, None for amplicon
@@ -29,14 +29,15 @@ class UMICounter(object):
         self.deletions = list()
         self.insertions = list()
         self.tags = tags
+        self.min_mh = min_mh
 
     def count(self,read):
 
-        for tag in self.tags:
-            if tag not in read.tags:
-                continue
+        if self.tags is not None:
+            if not all(read.has_tag(tag) for tag in self.tags):
+                return
 
-        tag_vals = (read.get_tag(tag) for tag in self.tags) if self.tags is not None else None
+        tag_vals = [read.get_tag(tag) for tag in self.tags] if self.tags is not None else None
 
         self.inc('total',tag_vals)
 
@@ -52,7 +53,7 @@ class UMICounter(object):
                 self.inc('del',tag_vals)
 
                 if deletion_info['microhomology_length'] >= self.min_mh:
-                    self.inct('del_mh',tag_vals)
+                    self.inc('del_mh',tag_vals)
                 else:
                     self.inc('del_nomh',tag_vals)
 
@@ -71,7 +72,7 @@ class UMICounter(object):
                 self.insertions.append(insertion_info)
 
             ## Check for point mutations
-            if self.reporter.unrepaired_base in 'ACGT':
+            if isinstance(self.reporter.unrepaired_base, str) and (self.reporter.unrepaired_base in 'ACGT'):
                 base_aligned, base = check_base(read, self.reporter.lesion_position)
 
                 if base_aligned:
@@ -106,18 +107,18 @@ class UMICounter(object):
             self.mismatch_dist['N'][ref_pos] += 1
 
 class HCRseqQuantifier(object):
-    def __init__(self,reference,tags):
+    def __init__(self,reference,tags,min_mh=3):
         self.reference = reference
         self.tags = tags
         self.counters = dict()
 
         for reporter in self.reference.reporters:
-            self.counts[reporter] = UMICounter(reporter,tags)
+            self.counters[reporter.name] = UMICounter(reporter,tags,min_mh=min_mh)
 
-    def count_umis(self,bam,min_mapq = 5,min_mh=3,require_exact_bc=True):
+    def count_umis(self,bam,min_mapq = 5,require_exact_bc=True):
 
         with pysam.AlignmentFile(bam) as bam_in:
-            for reporter_counter in self.counters:
+            for reporter_counter in self.counters.values():
                 reporter = reporter_counter.reporter
                 for read in bam_in.fetch(reporter.name):
 
@@ -139,7 +140,7 @@ class HCRseqQuantifier(object):
 
     def get_counts(self):
         counts = {counter.reporter.name : counter.counts
-                  for counter in self.counters}
+                  for counter in self.counters.values()}
         return counts
 
     def quantify_repair(self):
@@ -173,11 +174,11 @@ def check_deletion(read,pos,ref,allow_after_base=False):
     deletion_info = {}
     if is_spanning_del:
         aligned_idx = ~np.isnan(x[:, 0])
-        st = x[np.where(aligned_idx & (x[:, 1] < pos))[0][-1], 1]
-        en = x[np.where(aligned_idx & (x[:, 1] > pos))[0][0], 1]
+        st = int(x[np.where(aligned_idx & (x[:, 1] < pos))[0][-1], 1])
+        en = int(x[np.where(aligned_idx & (x[:, 1] > pos))[0][0], 1])
 
-        deleted_sequence = ref.fetch(contig, st + 1, en)
-        flank_sequence = ref.fetch(contig, en, en + len(deleted_sequence))
+        deleted_sequence = ref[(st + 1):en]
+        flank_sequence = ref[en:(en + len(deleted_sequence))]
         max_mh_len = min(len(deleted_sequence),len(flank_sequence))
         mh_len = sum(np.cumprod(np.array(list(deleted_sequence[0:max_mh_len])) == np.array(list(flank_sequence[0:max_mh_len]))))
 
