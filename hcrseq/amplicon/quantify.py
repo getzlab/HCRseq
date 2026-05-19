@@ -74,7 +74,8 @@ def count_umis(bam, ref_fasta, lesion_info,min_mapq = 5,min_mh=3):
             contig = read.reference_name
 
             # Check barcode sequence is correct
-            if not check_reporter_barcode(read,ref.fetch(contig)):
+            offset = 23 if contig == "GFP_BAR_DSBR_2" else 42
+            if not check_reporter_barcode(read,ref.fetch(contig),barcode_offset=offset):
                 continue
 
             if contig not in counts.keys():
