@@ -1,0 +1,11 @@
+@HD	VN:1.0	SO:unsorted
+@SQ	SN:GFP_BAR_010	LN:129	M5:246e72bfda8e8742ca13ab748d44a458	UR:file:///Users/njharlen/git/HCRseq/reference/HCRseq_v0.3.1/amplicon/HCRseq_v0.3.1.fasta
+@SQ	SN:GFP_BAR_003	LN:129	M5:9d39ba19fa5f20090b69237ba93fa06d	UR:file:///Users/njharlen/git/HCRseq/reference/HCRseq_v0.3.1/amplicon/HCRseq_v0.3.1.fasta
+@SQ	SN:GFP_BAR_004	LN:129	M5:2b715ae65171c5c4ab567750d0dd0a13	UR:file:///Users/njharlen/git/HCRseq/reference/HCRseq_v0.3.1/amplicon/HCRseq_v0.3.1.fasta
+@SQ	SN:GFP_BAR_005	LN:129	M5:d19f8516508421dd0542ffc25fef95a6	UR:file:///Users/njharlen/git/HCRseq/reference/HCRseq_v0.3.1/amplicon/HCRseq_v0.3.1.fasta
+@SQ	SN:GFP_BAR_006	LN:129	M5:e00d54799f1bcfe96db98f3c8d8a0a84	UR:file:///Users/njharlen/git/HCRseq/reference/HCRseq_v0.3.1/amplicon/HCRseq_v0.3.1.fasta
+@SQ	SN:GFP_BAR_007	LN:129	M5:500e4d29a7618a285dc831ea0acdbae8	UR:file:///Users/njharlen/git/HCRseq/reference/HCRseq_v0.3.1/amplicon/HCRseq_v0.3.1.fasta
+@SQ	SN:GFP_BAR_008	LN:129	M5:529a0e91522c4ed797ddbb7f7cc8c19c	UR:file:///Users/njharlen/git/HCRseq/reference/HCRseq_v0.3.1/amplicon/HCRseq_v0.3.1.fasta
+@SQ	SN:GFP_BAR_009	LN:129	M5:f9cea182ab03ce9d8aa49d2924630382	UR:file:///Users/njharlen/git/HCRseq/reference/HCRseq_v0.3.1/amplicon/HCRseq_v0.3.1.fasta
+@SQ	SN:GFP_BAR_DSBR_2	LN:95	M5:2cedf835713e4e63081c7c261729b4de	UR:file:///Users/njharlen/git/HCRseq/reference/HCRseq_v0.3.1/amplicon/HCRseq_v0.3.1.fasta
+@SQ	SN:GFP_BAR_DSBR_HR	LN:101	M5:de0ff3a248ff22acd19a297e685aa641	UR:file:///Users/njharlen/git/HCRseq/reference/HCRseq_v0.3.1/amplicon/HCRseq_v0.3.1.fasta
