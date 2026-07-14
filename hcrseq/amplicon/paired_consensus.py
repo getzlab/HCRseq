@@ -3,7 +3,7 @@ import gzip
 import numpy as np
 import sys
 
-from hcrseq.amplicon.util import rc
+from hcrseq.common.util import rc
 
 BP = {'A' : 'T',
       'C' : 'G',

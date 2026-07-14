@@ -57,8 +57,9 @@ class UMICounter(object):
                 else:
                     self.inc('del_nomh',tag_vals)
 
-                for tag in self.tags:
-                    deletion_info[tag] = read.get_tag(tag)
+                if self.tags is not None:
+                    for tag in self.tags:
+                        deletion_info[tag] = read.get_tag(tag)
                 self.deletions.append(deletion_info)
 
             ## Check for insertions
@@ -66,8 +67,9 @@ class UMICounter(object):
             if has_insertion:
                 self.inc('ins',tag_vals)
 
-                for tag in self.tags:
-                    insertion_info[tag] = read.get_tag(tag)
+                if self.tags is not None:
+                    for tag in self.tags:
+                        insertion_info[tag] = read.get_tag(tag)
 
                 self.insertions.append(insertion_info)
 
@@ -134,7 +136,7 @@ class HCRseqQuantifier(object):
 
                     reporter_counter.count(read)
     def get_indel_df(self,indel_type):
-        df = pd.concat([pd.DataFrame(getattr(counter,indel_type)) for counter in self.counters],
+        df = pd.concat([pd.DataFrame(getattr(counter,indel_type)) for counter in self.counters.values()],
                        axis=0)
         return(df)
 
@@ -143,17 +145,75 @@ class HCRseqQuantifier(object):
                   for counter in self.counters.values()}
         return counts
 
+    def get_cell_counts(self):
+        """
+        Collapses UMI-level counts into a single Counter per (reporter, cell barcode).
+        Requires the quantifier to have been constructed with (cell_tag, umi_tag) tags.
+        """
+        if self.tags is None:
+            raise ValueError('get_cell_counts requires per-cell tags, e.g. ("CB", "UB")')
+
+        return {reporter_name: {cb: self._collapse_counts(umi_counts)
+                                for cb, umi_counts in reporter_counts.items()}
+                for reporter_name, reporter_counts in self.get_counts().items()}
+
+    def quantify_repair_per_cell(self):
+        """
+        Computes repair pathway measurements independently for each cell barcode.
+        Returns dict[pathway_name][cell_barcode] -> {'value': ..., 'sd': ...}
+        """
+        cell_counts = self.get_cell_counts()
+        cell_barcodes = {cb for reporter_counts in cell_counts.values() for cb in reporter_counts}
+
+        repair_measurements = {pathway.name: {} for pathway in self.reference.pathways}
+        for cb in cell_barcodes:
+            counts = {reporter_name: reporter_counts.get(cb, Counter())
+                     for reporter_name, reporter_counts in cell_counts.items()}
+
+            for pathway in self.reference.pathways:
+                counts.setdefault(pathway.reporter.name, Counter())
+                counts.setdefault(pathway.control.name, Counter())
+                value, sd = pathway.calculate_repair(counts)
+                repair_measurements[pathway.name][cb] = {'value': value, 'sd': sd}
+
+        return repair_measurements
+
     def quantify_repair(self):
 
-        c = self.get_counts()
+        counts = self.get_counts()
+        aggregated_counts = {}
 
+        for reporter_name, reporter_counts in counts.items():
+            aggregated_counts[reporter_name] = self._collapse_counts(reporter_counts)
+
+        repair_measurements = {}
         for pathway in self.reference.pathways:
-            r,sd = pathway.calculate_repair(c)
-            pass
+            if pathway.reporter.name not in aggregated_counts:
+                aggregated_counts[pathway.reporter.name] = Counter()
+            if pathway.control.name not in aggregated_counts:
+                aggregated_counts[pathway.control.name] = Counter()
 
+            value, sd = pathway.calculate_repair(aggregated_counts)
+            repair_measurements[pathway.name] = {'value': value, 'sd': sd}
 
+        self.repair_measurements = repair_measurements
+        return repair_measurements
 
-        pass
+    @staticmethod
+    def _collapse_counts(counts):
+        if isinstance(counts, Counter):
+            return counts.copy()
+
+        if not isinstance(counts, dict):
+            return Counter()
+
+        if counts and isinstance(next(iter(counts.values())), dict):
+            collapsed = Counter()
+            for value in counts.values():
+                collapsed.update(HCRseqQuantifier._collapse_counts(value))
+            return collapsed
+
+        return Counter(counts)
 
 
 def check_deletion(read,pos,ref,allow_after_base=False):

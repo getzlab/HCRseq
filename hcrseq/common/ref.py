@@ -65,13 +65,34 @@ class Reference:
 
     def write_amplicon_fasta(self,out_fasta):
         with open(out_fasta, 'w') as fout:
-            for _, reporter in self.reporters:
+            for reporter in self.reporters:
                 # Write it to fasta
                 r = pysam.FastxRecord()
                 r.name = reporter.name
                 r.sequence = reporter.sequence
 
                 fout.write(str(r) + '\n')
+
+    def to_amplicon(self,primers):
+        """
+        Returns a new Reference restricted to reporters that contain the given
+        (forward, reverse) primer pair, with each kept reporter's sequence,
+        lesion_position, and barcode_position trimmed to amplicon coordinates.
+        """
+        trimmed_forward_primer = primers[0][1:]
+        rc_reverse_primer = rc(primers[1])
+
+        kept_reporters = []
+        for reporter in self.reporters:
+            if (trimmed_forward_primer in reporter.sequence) and (rc_reverse_primer in reporter.sequence):
+                reporter.to_amplicon(primers)
+                kept_reporters.append(reporter)
+
+        kept_names = {reporter.name for reporter in kept_reporters}
+        kept_pathways = [pathway for pathway in self.pathways
+                         if (pathway.reporter.name in kept_names) and (pathway.control.name in kept_names)]
+
+        return Reference(reporters=kept_reporters,pathways=kept_pathways,primers=primers)
 
     def write_gtf(self):
         pass
@@ -183,6 +204,9 @@ class Pathway:
 
         reporter = counts[self.reporter.name]['total'] - counts[self.reporter.name]['del_mh']
         control = counts[self.control.name]['total']
+
+        if control == 0:
+            return (np.nan, np.nan)
 
         r, sd = self._calculate_ratio_and_sd(reporter, control)
         return (r, sd)

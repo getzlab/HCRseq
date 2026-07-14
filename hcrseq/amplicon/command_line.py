@@ -1,9 +1,13 @@
 import subprocess
 
+import pysam
+
 from hcrseq.amplicon.quantify import count_umis, quantify_repair
-from hcrseq.amplicon.ref import create_amplicon_reference_v2
+from hcrseq.amplicon.ref import index_reference
 from hcrseq.amplicon.aggregate import aggregate_results
 from hcrseq.amplicon.downsampling import calculate_sequencing_saturation_curve
+from hcrseq.common.ref import Reference
+from hcrseq.common.util import rc
 import yaml
 import glob
 import click
@@ -39,20 +43,20 @@ def calculate_sequencing_saturation(bam,cutadapt_json,outstem):
 
 @amplicon.command()
 @click.option("--bam")
-@click.option("--reference")
-@click.option("--lesion_info")
-@click.option("--pathway_info")
+@click.option("--ref_path")
 @click.option("--outstem")
-def quantify(bam,reference,lesion_info,pathway_info,outstem):
+@click.option("--min_mapq",default=5,type=int)
+def quantify(bam,ref_path,outstem,min_mapq):
     """
     Runs repair quantification on bam file
     """
 
     print('QUANTIFYING...')
-    counts,del_df,ins_df,mismatch_dist = count_umis(bam,reference,lesion_info)
+    reference = Reference.load(ref_path)
+    counts,del_df,ins_df,mismatch_dist = count_umis(bam,reference,min_mapq=min_mapq)
 
     with open(f"{outstem}.reporter_metrics.yaml","wt") as f:
-        yaml.dump(counts,f)
+        yaml.dump({name: dict(reporter_counts) for name, reporter_counts in counts.items()},f)
 
     mismatch_df = pd.DataFrame(mismatch_dist).T.explode(['nsnp','ndel','nins','N']).reset_index(names='contig')
     mismatch_df['position'] =  mismatch_df.groupby('contig').cumcount() + 1
@@ -62,7 +66,7 @@ def quantify(bam,reference,lesion_info,pathway_info,outstem):
     del_df.to_csv(f"{outstem}.deletions.csv",index=None)
     ins_df.to_csv(f"{outstem}.insertions.csv",index=None)
 
-    q = quantify_repair(counts,pathway_info)
+    q = quantify_repair(counts,reference)
     with open(f"{outstem}.repair_measurements.yaml","wt") as f:
         yaml.dump(q,f)
 
@@ -80,20 +84,36 @@ def aggregate(cutadapt_files,count_files,repair_files,ids,outstem):
                       outstem)
 
 @amplicon.command()
-@click.option("--reporter_info")
-@click.option(("--mmej_variants"))
+@click.option("--hcrseq_ref")
 @click.option("--forward_primer")
 @click.option("--reverse_primer")
+@click.option("--umi_len",default=15,type=int)
 @click.option("--outstem")
-def prepare_reference(reporter_info,mmej_variants,forward_primer,reverse_primer,outstem):
+def prepare_amplicon_reference(hcrseq_ref,forward_primer,reverse_primer,umi_len,outstem):
     """
-    Given TSV with reporter info, creates fasta and indices, lesion position, and primer files need to run reprocessing
+    Given a pickled HCR-seq Reference (eg. one built for scRNA), derives a primer-trimmed
+    amplicon reference: an indexed fasta for alignment plus a matching Reference pickle
+    (restricted to reporters containing the given primers) for quantification.
     """
-    create_amplicon_reference_v2(reporter_info=reporter_info,
-                                 mmej_variants=mmej_variants,
-                                 forward_primer=forward_primer,
-                                 reverse_primer=reverse_primer,
-                                 outstem=outstem)
+    reference = Reference.load(hcrseq_ref)
+    amplicon_reference = reference.to_amplicon((forward_primer,reverse_primer))
+
+    out_fasta = outstem + '.fasta'
+    amplicon_reference.write_amplicon_fasta(out_fasta)
+    index_reference(out_fasta)
+    pysam.dict(out_fasta, '-o', outstem + '.dict')
+
+    amplicon_reference.write_pickle(outstem + '.pkl')
+
+    primer_content = \
+        f"""FWDPRIMER={forward_primer}
+RCFWDPRIMER={rc(forward_primer)}
+RCREVPRIMER={rc(reverse_primer)}
+REVPRIMER={reverse_primer}
+umi_len={umi_len}
+"""
+    with open(outstem + '.primers.sh','wt') as pout:
+        pout.write(primer_content)
 
 
 
