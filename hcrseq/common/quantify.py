@@ -136,6 +136,12 @@ def _count_reporter(bam,reporter,tags,min_mh,min_mapq,require_exact_bc):
 
     n_reads = 0
     with pysam.AlignmentFile(bam) as bam_in:
+        # Not every reference reporter is necessarily present in this bam's genome
+        # build (e.g. a construct that wasn't included in this experiment) - leave
+        # its counter empty rather than erroring on fetch().
+        if reporter.name not in bam_in.references:
+            return counter
+
         for read in bam_in.fetch(reporter.name):
 
             n_reads += 1
@@ -243,18 +249,77 @@ class HCRseqQuantifier(object):
     @staticmethod
     def _collapse_counts(counts):
         if isinstance(counts, Counter):
+            # A flat, already-aggregated Counter - either amplicon mode (reads are
+            # deduplicated to one per UMI upstream, at the bam level, before ever
+            # reaching UMICounter) or an already-resolved per-UMI call. Either way,
+            # there's nothing left to collapse.
             return counts.copy()
 
         if not isinstance(counts, dict):
             return Counter()
 
-        if counts and isinstance(next(iter(counts.values())), dict):
+        if not counts:
+            return Counter()
+
+        first_value = next(iter(counts.values()))
+
+        if isinstance(first_value, Counter):
+            # This dict's values are raw per-UMI counters (dict[UMI] -> Counter):
+            # each UMI represents one molecule, so resolve it down to a single
+            # consensus call before summing across UMIs.
+            collapsed = Counter()
+            for umi_counts in counts.values():
+                collapsed.update(HCRseqQuantifier._resolve_umi_counts(umi_counts))
+            return collapsed
+
+        if isinstance(first_value, dict):
+            # Nested further (e.g. dict[CB] -> dict[UMI] -> Counter) - keep
+            # recursing until UMI-level counters are reached.
             collapsed = Counter()
             for value in counts.values():
                 collapsed.update(HCRseqQuantifier._collapse_counts(value))
             return collapsed
 
+        # A flat dict of scalars (e.g. counts assigned directly rather than
+        # accumulated via UMICounter.inc()) - nothing to collapse.
         return Counter(counts)
+
+    @staticmethod
+    def _resolve_umi_counts(umi_counts):
+        """
+        Collapses one UMI's raw per-read counts down to a single consensus call.
+        A UMI is meant to represent one original molecule, so reads sharing a UMI
+        (PCR/optical duplicates) should contribute one vote each towards a single
+        outcome for that molecule, not one independent count per read.
+        """
+        resolved = Counter(total=1)
+
+        vote_keys = ('A', 'C', 'G', 'T', 'N', 'del', 'ins')
+        votes = {key: umi_counts.get(key, 0) for key in vote_keys}
+        max_vote = max(votes.values())
+
+        if max_vote > 0:
+            winners = [key for key, val in votes.items() if val == max_vote]
+            if len(winners) > 1:
+                resolved['n_base_ambiguous'] = 1
+            else:
+                winner = winners[0]
+                resolved[winner] = 1
+
+                if winner == 'del':
+                    del_mh = umi_counts.get('del_mh', 0)
+                    del_nomh = umi_counts.get('del_nomh', 0)
+                    resolved['del_mh' if del_mh >= del_nomh else 'del_nomh'] = 1
+
+        repaired = umi_counts.get('repaired', 0)
+        unrepaired = umi_counts.get('unrepaired', 0)
+        if repaired or unrepaired:
+            if repaired == unrepaired:
+                resolved['n_repaired_ambiguous'] = 1
+            else:
+                resolved['repaired' if repaired > unrepaired else 'unrepaired'] = 1
+
+        return resolved
 
 
 def check_deletion(read,aligned_pairs,pos,ref,allow_after_base=False):

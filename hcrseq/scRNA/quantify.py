@@ -16,12 +16,14 @@ def quantify_repair(h5_file,bam,
     else:
         adata = sc.read(h5_file)
     
-    plasmid_idx = adata.var.index.str.match('GFP_')
+    ref = Reference.load(ref_path)
+    reporter_names = [reporter.name for reporter in ref.reporters]
+
+    plasmid_idx = adata.var.index.isin(reporter_names)
     adata.obs[adata.var.index[plasmid_idx]] = adata[:,plasmid_idx].to_df()
     adata = adata[:,~plasmid_idx]
 
     # Perform the reporter counting and quantification
-    ref = Reference.load(ref_path)
     q = HCRseqQuantifier(ref,("CB","UB"))
     q.count_umis(bam,min_mapq=min_mapq)
 

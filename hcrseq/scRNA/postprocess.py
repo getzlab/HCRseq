@@ -238,7 +238,16 @@ def calculate_md_and_nm(read, ref_seq):
 def _subsample_contig(bam,contig,target,seed):
     contig_bam = f"{bam}.{contig}.subsampled.bam"
     total_reads = int(pysam.view("-c",bam,contig))
-    fraction = min(target / total_reads, 0.99999) if total_reads else 0
+
+    if total_reads == 0:
+        # samtools view -s rejects a "0" sampling fraction, so there's nothing to
+        # subsample - just write out an empty, header-only bam for this contig.
+        with pysam.AlignmentFile(bam) as bam_in:
+            with pysam.AlignmentFile(contig_bam,"wb",header=bam_in.header):
+                pass
+        return contig_bam
+
+    fraction = min(target / total_reads, 0.99999)
     subsample_param = f"{seed + fraction:.6f}".rstrip('0').rstrip('.')
     pysam.view("-bh",
                "-o", contig_bam,
