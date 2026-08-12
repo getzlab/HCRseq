@@ -1,4 +1,6 @@
 from hcrseq.common.ref import Reference
+from concurrent.futures import ProcessPoolExecutor
+import os
 import pysam
 import parasail
 import re
@@ -232,6 +234,50 @@ def calculate_md_and_nm(read, ref_seq):
     md_str = re.sub(r'(?<=[A-Z\^])0+(?=[A-Z\^])', '', md_str)
 
     return md_str, nm_count
+
+def _subsample_contig(bam,contig,target,seed):
+    contig_bam = f"{bam}.{contig}.subsampled.bam"
+    total_reads = int(pysam.view("-c",bam,contig))
+    fraction = min(target / total_reads, 1.0) if total_reads else 0
+    pysam.view("-bh",
+               "-o", contig_bam,
+               "-s", str(seed + fraction),
+               bam,
+               contig,
+               catch_stdout=False)
+    return contig_bam
+
+def create_subsampled_bam(bam,reference,target,seed=0):
+    """
+    Creates a subsampled bam with up to [target] randomly selected
+    reads from each reporter contig in [reference]
+    """
+    with pysam.AlignmentFile(bam) as f:
+        sort_order = f.header.to_dict().get("HD", {}).get("SO")
+    if sort_order != "coordinate":
+        raise ValueError(f"{bam} must be coordinate-sorted (found SO:{sort_order}) "
+                          "for the per-contig merge below to come out sorted")
+
+    ref = Reference.load(reference)
+    contigs = [reporter.name for reporter in ref.reporters]
+
+    with ProcessPoolExecutor(max_workers=len(contigs)) as pool:
+        contig_bams = list(pool.map(_subsample_contig,
+                                     [bam] * len(contigs),
+                                     contigs,
+                                     [target] * len(contigs),
+                                     [seed] * len(contigs)))
+
+    # Each contig_bam is a region-filtered subset of the coordinate-sorted input, so it
+    # is itself already coordinate-sorted; merging pre-sorted, single-contig inputs with
+    # samtools' default (position) merge mode yields a fully coordinate-sorted bam directly,
+    # with no separate sort pass needed.
+    pysam.merge("-f", "-o", f"{bam}.subsampled.bam", *contig_bams)
+    pysam.index(f"{bam}.subsampled.bam")
+
+    for contig_bam in contig_bams:
+        os.remove(contig_bam)
+
 
 if __name__ == "__main__":
     bam_in = sys.argv[1]
