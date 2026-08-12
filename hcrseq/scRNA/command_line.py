@@ -35,7 +35,9 @@ def prepare_reference(hcrseq_ref,genome_fasta,gtf,outstem):
 @click.option("--bam")
 @click.option("--ref_path")
 @click.option("--outstem")
-def postprocess_reporter_bam(bam,ref_path,outstem):
+@click.option("--threads", default=8, type=int, help="Number of CPU threads to use.")
+@click.option("--mem-per-thread", default="4G", help="Memory per thread for sorting (e.g. 4G, 2000M).")
+def postprocess_reporter_bam(bam,ref_path,outstem,threads,mem_per_thread):
     """
     Extracts reads aligning to the reporter contigs, realigns reporter transcripts,
     then sorts and indexes the resulting bam
@@ -54,8 +56,15 @@ def postprocess_reporter_bam(bam,ref_path,outstem):
     realign_reporter_transcripts(reporter_bam,realigned_bam,ref_path)
 
     # Sort and index the final bam
-    pysam.sort("-o",sorted_bam,realigned_bam)
-    pysam.index(sorted_bam)
+    pysam.sort(
+        "-@", str(threads),
+        "-m", mem_per_thread,
+        "-o", sorted_bam,
+        realigned_bam
+    )
+
+    # Index the sorted BAM using available threads
+    pysam.index("-@", str(threads), sorted_bam)
 
 @scrna.command()
 @click.option("--h5_file")
