@@ -4,7 +4,7 @@ import click
 import pysam
 from hcrseq.common.ref import Reference
 from hcrseq.scRNA.ref import merge_genome_and_plasmid_ref
-from hcrseq.scRNA.postprocess import realign_reporter_transcripts
+from hcrseq.scRNA.postprocess import realign_reporter_transcripts, create_subsampled_bam
 from hcrseq.scRNA.quantify import quantify_repair
 
 @click.group()
@@ -37,10 +37,14 @@ def prepare_reference(hcrseq_ref,genome_fasta,gtf,outstem):
 @click.option("--outstem")
 @click.option("--threads", default=8, type=int, help="Number of CPU threads to use.")
 @click.option("--mem-per-thread", default="4G", help="Memory per thread for sorting (e.g. 4G, 2000M).")
-def postprocess_reporter_bam(bam,ref_path,outstem,threads,mem_per_thread):
+@click.option("--subsample_target", default=10000, type=int,
+              help="If set, also produce a bam subsampled to at most this many reads per reporter contig.")
+@click.option("--subsample_seed", default=0, type=int, help="Random seed used for subsampling.")
+def postprocess_reporter_bam(bam,ref_path,outstem,threads,mem_per_thread,subsample_target,subsample_seed):
     """
     Extracts reads aligning to the reporter contigs, realigns reporter transcripts,
-    then sorts and indexes the resulting bam
+    then sorts and indexes the resulting bam. Optionally also produces a subsampled
+    version of that bam.
     """
     ref = Reference.load(ref_path)
     reporter_contigs = [reporter.name for reporter in ref.reporters]
@@ -65,6 +69,9 @@ def postprocess_reporter_bam(bam,ref_path,outstem,threads,mem_per_thread):
 
     # Index the sorted BAM using available threads
     pysam.index("-@", str(threads), sorted_bam)
+
+    if subsample_target is not None:
+        create_subsampled_bam(sorted_bam, ref_path, subsample_target, seed=subsample_seed)
 
 @scrna.command()
 @click.option("--h5_file")

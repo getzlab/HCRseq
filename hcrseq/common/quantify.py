@@ -1,9 +1,15 @@
+import os
 import numpy as np
 import pandas as pd
 import pysam
 from collections import Counter, defaultdict
+from concurrent.futures import ProcessPoolExecutor
 
 from hcrseq.common.util import check_perfect_match
+
+
+def _new_umi_counts():
+    return defaultdict(Counter)
 
 
 class UMICounter(object):
@@ -20,7 +26,7 @@ class UMICounter(object):
             self.counts = Counter()
         else:
             # scRNA mode, need two layer dictionary for CB/UMI
-            self.counts = defaultdict(lambda: defaultdict(Counter))
+            self.counts = defaultdict(_new_umi_counts)
 
         self.mismatch_dist = {'nsnp': np.zeros(ref_len),
                         'ndel': np.zeros(ref_len),
@@ -31,7 +37,12 @@ class UMICounter(object):
         self.tags = tags
         self.min_mh = min_mh
 
-    def count(self,read):
+    def count(self,read,aligned_pairs):
+        """
+        :param aligned_pairs: read.get_aligned_pairs(with_seq=True,matches_only=False), computed once
+            per read by the caller and shared across all the checks below to avoid re-walking the
+            read's CIGAR/MD tag from scratch for each one.
+        """
 
         if self.tags is not None:
             if not all(read.has_tag(tag) for tag in self.tags):
@@ -41,11 +52,16 @@ class UMICounter(object):
 
         self.inc('total',tag_vals)
 
-        self.count_mismatches(read)
+        self.count_mismatches(aligned_pairs)
 
         if self.reporter.lesion_position is not None:
+            # Drop the per-position reference base: the deletion/insertion/base checks
+            # below only need positions, not the with_seq annotation.
+            pairs = [(query_pos, ref_pos) for query_pos, ref_pos, _ in aligned_pairs]
+
             # Report any deletion spanning lesion
             is_deleted, deletion_info = check_deletion(read,
+                                                       pairs,
                                                        self.reporter.lesion_position,
                                                        self.reporter.sequence,
                                                        allow_after_base=self.reporter.unrepaired_base == 'DSB')
@@ -63,7 +79,7 @@ class UMICounter(object):
                 self.deletions.append(deletion_info)
 
             ## Check for insertions
-            has_insertion, insertion_info = check_insertion(read, self.reporter.lesion_position)
+            has_insertion, insertion_info = check_insertion(read, pairs, self.reporter.lesion_position)
             if has_insertion:
                 self.inc('ins',tag_vals)
 
@@ -75,7 +91,8 @@ class UMICounter(object):
 
             ## Check for point mutations
             if isinstance(self.reporter.unrepaired_base, str) and (self.reporter.unrepaired_base in 'ACGT'):
-                base_aligned, base = check_base(read, self.reporter.lesion_position)
+                matches_only_pairs = [pair for pair in pairs if pair[0] is not None and pair[1] is not None]
+                base_aligned, base = check_base(read, matches_only_pairs, self.reporter.lesion_position)
 
                 if base_aligned:
                     self.inc('repaired',tag_vals,base == self.reporter.repaired_base)
@@ -91,9 +108,7 @@ class UMICounter(object):
             # scRNA mode, need to keep try of CB/UMI
             self.counts[tag_vals[0]][tag_vals[1]][key] += val
 
-    def count_mismatches(self,read):
-
-        aligned_pairs = read.get_aligned_pairs(with_seq=True)
+    def count_mismatches(self,aligned_pairs):
 
         for i, (query_pos, ref_pos, ref_base) in enumerate(aligned_pairs):
 
@@ -108,6 +123,33 @@ class UMICounter(object):
                 self.mismatch_dist['nins'][ref_pos] += 1
             self.mismatch_dist['N'][ref_pos] += 1
 
+def _count_reporter(bam,reporter,tags,min_mh,min_mapq,require_exact_bc):
+    """
+    Counts UMIs for a single reporter contig. Split out as a module-level function so
+    HCRseqQuantifier.count_umis can run one process per reporter contig in parallel -
+    each reporter's fetch+count is independent of every other reporter's.
+    """
+    counter = UMICounter(reporter,tags,min_mh=min_mh)
+
+    with pysam.AlignmentFile(bam) as bam_in:
+        for read in bam_in.fetch(reporter.name):
+
+            if read.mapq < min_mapq:
+                continue
+
+            aligned_pairs = read.get_aligned_pairs(with_seq=True,matches_only=False)
+
+            # Check barcode sequence is correct
+            if require_exact_bc and (reporter.barcode is not None):
+                if not check_perfect_match(aligned_pairs,
+                                           reporter.barcode_position,
+                                           reporter.barcode_position+reporter.barcode_len):
+                    continue
+
+            counter.count(read,aligned_pairs)
+
+    return counter
+
 class HCRseqQuantifier(object):
     def __init__(self,reference,tags,min_mh=3):
         self.reference = reference
@@ -119,22 +161,13 @@ class HCRseqQuantifier(object):
 
     def count_umis(self,bam,min_mapq = 5,require_exact_bc=True):
 
-        with pysam.AlignmentFile(bam) as bam_in:
-            for reporter_counter in self.counters.values():
-                reporter = reporter_counter.reporter
-                for read in bam_in.fetch(reporter.name):
+        max_workers = min(len(self.counters), os.cpu_count() or 1)
+        with ProcessPoolExecutor(max_workers=max_workers) as pool:
+            futures = {name: pool.submit(_count_reporter,bam,counter.reporter,self.tags,
+                                         counter.min_mh,min_mapq,require_exact_bc)
+                      for name,counter in self.counters.items()}
+            self.counters = {name: future.result() for name,future in futures.items()}
 
-                    if read.mapq < min_mapq:
-                        continue
-
-                    # Check barcode sequence is correct
-                    if require_exact_bc and (reporter.barcode is not None):
-                        if not check_perfect_match(read,
-                                                   reporter.barcode_position,
-                                               reporter.barcode_position+reporter.barcode_len):
-                            continue
-
-                    reporter_counter.count(read)
     def get_indel_df(self,indel_type):
         df = pd.concat([pd.DataFrame(getattr(counter,indel_type)) for counter in self.counters.values()],
                        axis=0)
@@ -216,13 +249,9 @@ class HCRseqQuantifier(object):
         return Counter(counts)
 
 
-def check_deletion(read,pos,ref,allow_after_base=False):
-
-    contig = read.reference_name
-    aligned_pairs = read.get_aligned_pairs(matches_only=False)
+def check_deletion(read,aligned_pairs,pos,ref,allow_after_base=False):
 
     x = np.array(aligned_pairs).astype(float)
-    x[x == None] = np.nan
 
     is_spanning_del = any((np.isnan(x[:, 0])) & (x[:, 1] == pos) )
 
@@ -257,9 +286,7 @@ def check_deletion(read,pos,ref,allow_after_base=False):
     return (is_spanning_del, deletion_info)
 
 
-def check_insertion(read, pos):
-    aligned_pairs = read.get_aligned_pairs(matches_only=False)
-
+def check_insertion(read, aligned_pairs, pos):
     for i, (read_idx, ref_idx) in enumerate(aligned_pairs):
         # We are looking for an insertion that starts right after our target position
         has_insertion = ref_idx == pos and (i + 1 < len(aligned_pairs) and aligned_pairs[i + 1][1] is None)
@@ -284,9 +311,7 @@ def check_insertion(read, pos):
     return (False, {})
 
 
-def check_base(read,pos):
-    aligned_pairs = read.get_aligned_pairs(matches_only=True)
-
+def check_base(read,aligned_pairs,pos):
     for i, (read_idx, ref_idx) in enumerate(aligned_pairs):
         if ref_idx==pos:
             return(True,read.query_sequence[read_idx])

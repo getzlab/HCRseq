@@ -28,7 +28,7 @@ def quantify_repair(h5_file,bam,
     # Store the reporter count information (one obsm matrix of cell x reporter per metric)
     cell_counts = q.get_cell_counts()
     counts_df = pd.concat(
-        {reporter_name: pd.DataFrame(counts_by_cb).T
+        {reporter_name: pd.DataFrame.from_dict(counts_by_cb, orient='index')
          for reporter_name, counts_by_cb in cell_counts.items()},
         names=['reporter','CB']).fillna(0)
 

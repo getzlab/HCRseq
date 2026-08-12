@@ -10,12 +10,11 @@ def rc(seq):
     return("".join([BP[b] for b in reversed(seq)]))
 
 
-def check_perfect_match(read,ref_st,ref_en):
+def check_perfect_match(aligned_pairs,ref_st,ref_en):
     """
-    Returns true if a read perfectly aligns to a particular reference region with no mismatches/indels
+    Returns true if a read perfectly aligns to a particular reference region with no mismatches/indels.
+    aligned_pairs must come from read.get_aligned_pairs(with_seq=True,matches_only=False).
     """
-
-    aligned_pairs = read.get_aligned_pairs(with_seq=True,matches_only=False)
 
     found = False
     for read_pos,ref_pos,base in aligned_pairs:
