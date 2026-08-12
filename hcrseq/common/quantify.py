@@ -1,4 +1,5 @@
 import os
+import sys
 import numpy as np
 import pandas as pd
 import pysam
@@ -6,6 +7,8 @@ from collections import Counter, defaultdict
 from concurrent.futures import ProcessPoolExecutor
 
 from hcrseq.common.util import check_perfect_match
+
+PROGRESS_INTERVAL = 1_000_000
 
 
 def _new_umi_counts():
@@ -131,8 +134,13 @@ def _count_reporter(bam,reporter,tags,min_mh,min_mapq,require_exact_bc):
     """
     counter = UMICounter(reporter,tags,min_mh=min_mh)
 
+    n_reads = 0
     with pysam.AlignmentFile(bam) as bam_in:
         for read in bam_in.fetch(reporter.name):
+
+            n_reads += 1
+            if n_reads % PROGRESS_INTERVAL == 0:
+                print(f'[{reporter.name}] Processed {n_reads:,} reads',file=sys.stderr)
 
             if read.mapq < min_mapq:
                 continue
