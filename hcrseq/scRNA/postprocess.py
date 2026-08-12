@@ -238,10 +238,11 @@ def calculate_md_and_nm(read, ref_seq):
 def _subsample_contig(bam,contig,target,seed):
     contig_bam = f"{bam}.{contig}.subsampled.bam"
     total_reads = int(pysam.view("-c",bam,contig))
-    fraction = min(target / total_reads, 1.0) if total_reads else 0
+    fraction = min(target / total_reads, 0.99999) if total_reads else 0
+    subsample_param = f"{seed + fraction:.6f}".rstrip('0').rstrip('.')
     pysam.view("-bh",
                "-o", contig_bam,
-               "-s", str(seed + fraction),
+               "-s", subsample_param,
                bam,
                contig,
                catch_stdout=False)
