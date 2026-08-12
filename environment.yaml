@@ -2,7 +2,7 @@ name: hcrseq
 channels:
   - conda-forge
   - bioconda
-  - defaults
+  - nodefaults
 dependencies:
   # Core bioinformatics tools
   - python=3.11
@@ -13,6 +13,7 @@ dependencies:
 
   # Python libraries 
   - pip
+  - h5py
   - matplotlib~=3.8.3
   - seaborn~=0.13.2
   - numpy~=1.26.4
