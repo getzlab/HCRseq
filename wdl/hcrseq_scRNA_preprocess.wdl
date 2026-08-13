@@ -1,9 +1,25 @@
 workflow hcrseq_scRNA_quantify{
-  call postprocess_reporter_bam
+  
+  input {
+    File bam
+    File bai
+    String outstem
+    File ref_path
+  }
+
+  call postprocess_reporter_bam {
+    input:
+      bam = bam,
+      bai = bai,
+      outstem = outstem,
+      ref_path = ref_path
+  }
   call quantify {
     input:
       bam = postprocess_reporter_bam.postprocessed_bam,
-      bai = postprocess_reporter_bam.postprocessed_bai
+      bai = postprocess_reporter_bam.postprocessed_bai,
+      outstem = outstem,
+      ref_path = ref_path
   }
 }
 
