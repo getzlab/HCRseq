@@ -36,7 +36,7 @@ def quantify_repair(h5_file,bam,
 
     for metric in counts_df.columns:
         adata.obsm[metric + '_counts'] = adata.obs[[]].join(
-            counts_df[metric].unstack('reporter'),how='left')
+            counts_df[metric].unstack('reporter'),how='left').fillna(0)
 
     # Map per-cell repair pathway measurements into adata.obs
     repair_measurements = q.quantify_repair_per_cell()

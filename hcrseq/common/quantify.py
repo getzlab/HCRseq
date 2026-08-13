@@ -197,6 +197,7 @@ class HCRseqQuantifier(object):
         Collapses UMI-level counts into a single Counter per (reporter, cell barcode).
         Requires the quantifier to have been constructed with (cell_tag, umi_tag) tags.
         """
+        print("Collapsing UMI-level counts...",file=sys.stderr)
         if self.tags is None:
             raise ValueError('get_cell_counts requires per-cell tags, e.g. ("CB", "UB")')
 
