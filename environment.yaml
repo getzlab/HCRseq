@@ -5,7 +5,7 @@ channels:
   - nodefaults
 dependencies:
   # Core bioinformatics tools
-  - python=3.11
+  - python=3.12
   - samtools=1.21
   - bwa=0.7.18
   - picard
@@ -14,6 +14,7 @@ dependencies:
   # Python libraries 
   - pip
   - h5py
+  - hdf5=2.1.0
   - matplotlib~=3.8.3
   - seaborn~=0.13.2
   - numpy~=1.26.4
