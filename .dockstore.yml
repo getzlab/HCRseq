@@ -19,3 +19,4 @@ workflows:
     subclass: WDL
     primaryDescriptorPath: /wdl/sequencing_saturation.wdl
     readMePath: /README.md
+
