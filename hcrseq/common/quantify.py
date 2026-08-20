@@ -126,11 +126,15 @@ class UMICounter(object):
                 self.mismatch_dist['nins'][ref_pos] += 1
             self.mismatch_dist['N'][ref_pos] += 1
 
-def _count_reporter(bam,reporter,tags,min_mh,min_mapq,require_exact_bc):
+def _count_reporter(bam,reporter,tags,min_mh,min_mapq,require_exact_bc,barcodes=None):
     """
     Counts UMIs for a single reporter contig. Split out as a module-level function so
     HCRseqQuantifier.count_umis can run one process per reporter contig in parallel -
     each reporter's fetch+count is independent of every other reporter's.
+
+    :param barcodes: optional set of cell barcodes (matching the first of `tags`, e.g. CB)
+        to keep - reads from any other barcode (ambient/background, not a called cell) are
+        skipped before the expensive aligned_pairs/deletion/insertion checks below.
     """
     counter = UMICounter(reporter,tags,min_mh=min_mh)
 
@@ -150,6 +154,10 @@ def _count_reporter(bam,reporter,tags,min_mh,min_mapq,require_exact_bc):
 
             if read.mapq < min_mapq:
                 continue
+
+            if barcodes is not None:
+                if not read.has_tag(tags[0]) or read.get_tag(tags[0]) not in barcodes:
+                    continue
 
             aligned_pairs = read.get_aligned_pairs(with_seq=True,matches_only=False)
 
@@ -173,12 +181,18 @@ class HCRseqQuantifier(object):
         for reporter in self.reference.reporters:
             self.counters[reporter.name] = UMICounter(reporter,tags,min_mh=min_mh)
 
-    def count_umis(self,bam,min_mapq = 5,require_exact_bc=True):
+    def count_umis(self,bam,min_mapq = 5,require_exact_bc=True,barcodes=None):
+        """
+        :param barcodes: optional collection of cell barcodes to restrict counting to
+            (e.g. the called cells in an h5/h5ad matrix) - reads from any other barcode
+            are skipped. Ignored in amplicon mode (tags=None).
+        """
+        barcode_set = set(barcodes) if barcodes is not None else None
 
         max_workers = min(len(self.counters), os.cpu_count() or 1)
         with ProcessPoolExecutor(max_workers=max_workers) as pool:
             futures = {name: pool.submit(_count_reporter,bam,counter.reporter,self.tags,
-                                         counter.min_mh,min_mapq,require_exact_bc)
+                                         counter.min_mh,min_mapq,require_exact_bc,barcode_set)
                       for name,counter in self.counters.items()}
             self.counters = {name: future.result() for name,future in futures.items()}
 

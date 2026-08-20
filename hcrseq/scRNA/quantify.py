@@ -23,9 +23,10 @@ def quantify_repair(h5_file,bam,
     adata.obs[adata.var.index[plasmid_idx]] = adata[:,plasmid_idx].to_df()
     adata = adata[:,~plasmid_idx]
 
-    # Perform the reporter counting and quantification
+    # Perform the reporter counting and quantification, restricted to called cells
+    # (skips background/ambient barcodes rather than counting - and storing - them)
     q = HCRseqQuantifier(ref,("CB","UB"))
-    q.count_umis(bam,min_mapq=min_mapq)
+    q.count_umis(bam,min_mapq=min_mapq,barcodes=adata.obs.index)
 
     # Store the reporter count information (one obsm matrix of cell x reporter per metric)
     cell_counts = q.get_cell_counts()
