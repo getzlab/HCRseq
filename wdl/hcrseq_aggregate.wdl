@@ -1,5 +1,11 @@
 workflow hcrseq_aggregate{
   call aggregate
+
+  output {
+    File repair_measurements = aggregate.repair_measurements
+    File reporter_counts = aggregate.reporter_counts
+    File qc_metrics = aggregate.qc_metrics
+  }
 }
 
 task aggregate{

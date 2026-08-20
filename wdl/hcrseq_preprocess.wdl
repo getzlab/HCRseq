@@ -1,30 +1,44 @@
 workflow hcrseq_preprocess{
   call preprocess
+
+  output {
+    File bam = preprocess.bam
+    File bai = preprocess.bai
+    File cutadapt_json = preprocess.cutadapt_json
+    File reporter_counts = preprocess.reporter_counts
+    File repair_measurements = preprocess.repair_measurements
+    File deletions = preprocess.deletions
+    File insertions = preprocess.insertions
+    File mismatch_dist = preprocess.mismatch_dist
+  }
 }
 
 task preprocess{
   File fq1
   File fq2
-  File ref
-  File primer_config
-  File ref_path
+  File hcrseq_ref
+  String? foward_primer = "GACAACCACTACCTGAG"
+  String? reverse_primer = "TCACTTGTACAGCTCGTCCATGC"
   String outstem
   Int? min_mapq = 5
 
   command {
     set -euo pipefail
 
-    bwa index ${ref}
-    samtools dict ${ref} > $(sed -E 's/fa(sta)?$/dict/' <<< ${ref})
+    hcrseq amplicon prepare-reference \
+                  --hcrseq_ref=${hcrseq_ref}
+		  --forward_primer=${foward_primer} \
+	          --reverse_primer=${reverse_primer} \
+	          --outstem=amplicon_reference 
 
     hcrseq amplicon preprocess --fq1=${fq1} \
-    							--fq2=${fq2} \
-                  --reference=${ref} \
-                  --primer_config ${primer_config} \
+    		  --fq2=${fq2} \
+                  --reference=amplicon_reference.fasta \
+                  --primer_config amplicon_reference.primers.sh \
                   --outstem=${outstem}
 
     hcrseq amplicon quantify --bam=${outstem}.bam \
-                --ref_path=${ref_path} \
+                --ref_path=amplicon_reference.pkl \
                 --outstem=${outstem} \
                 --min_mapq=${min_mapq}
 

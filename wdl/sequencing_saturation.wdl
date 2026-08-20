@@ -1,5 +1,10 @@
 workflow hcrseq_saturation{
   call calc_saturation
+
+  output {
+    File saturation_plot = calc_saturation.saturation_plot
+    File saturation_data = calc_saturation.saturation_data
+  }
 }
 
 task calc_saturation{
