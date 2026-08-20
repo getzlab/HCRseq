@@ -1,0 +1,12 @@
+pathway	pathway_formatted	lesion	metric	reporter
+MMR	MMR	G:G	fraction_repaired	GFP_BAR_003
+NER	NER	UV	abundance	GFP_BAR_004
+DR_O6MeG	DR	O6meG	fraction_repaired	GFP_BAR_005
+BER_8oxoG_C	BER (8oxoG:C)	8oxoG:C	fraction_repaired	GFP_BAR_006
+BER_A_8oxoG	BER (8oxoA:8oxoG)	A:8oxoG	fraction_repaired	GFP_BAR_007
+BER_UG	BER (U:G)	U:G	fraction_repaired	GFP_BAR_008
+BER_Hx	BER (Hx:T)	Hx:T	fraction_repaired	GFP_BAR_009
+NHEJ	NHEJ	DSB	abundance_nommej	GFP_BAR_DSBR_2
+MMEJ	MMEJ	DSB	abundance_mmej	GFP_BAR_DSBR_2
+HR	HR	DSB	abundance	GFP_BAR_DSBR_HR
+control	Control	Control	control	GFP_BAR_010
