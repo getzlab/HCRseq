@@ -1,0 +1,21 @@
+version: 1.2
+workflows:
+  - name: hcrseq_preprocess
+    subclass: WDL
+    primaryDescriptorPath: /wdl/hcrseq_preprocess.wdl
+    readMePath: /README.md
+
+  - name: hcrseq_aggregate
+    subclass: WDL
+    primaryDescriptorPath: /wdl/hcrseq_aggregate.wdl
+    readMePath: /README.md
+
+  - name: hcrseq_scRNA_preprocess
+    subclass: WDL
+    primaryDescriptorPath: /wdl/hcrseq_scRNA_preprocess.wdl
+    readMePath: /README.md
+
+  - name: sequencing_saturation
+    subclass: WDL
+    primaryDescriptorPath: /wdl/sequencing_saturation.wdl
+    readMePath: /README.md
