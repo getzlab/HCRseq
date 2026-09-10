@@ -84,6 +84,7 @@ task quantify {
     String outstem
     Int min_mapq = 5
     Int disk_GB = 200
+    Int mem_GB = 32
   }
 
   command <<<
@@ -102,7 +103,7 @@ task quantify {
 
   runtime {
     docker: "gcr.io/broad-getzlab-fmhcrsparc/hcrseq:v1.0"
-    memory: "32 GB"
+    memory: mem_GB + " GB"
     disks: "local-disk " + disk_GB + " HDD"
     cpu: 4
     preemptible: 2
